@@ -1,0 +1,42 @@
+name: Build Standalone Windows Executable
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install "setuptools<80"
+          pip install pyinstaller pillow
+
+      - name: Set up Android Platform Tools (ADB)
+        run: |
+          Invoke-WebRequest -Uri "https://dl.google.com/android/repository/platform-tools-latest-windows.zip" -OutFile "platform-tools.zip"
+          Expand-Archive -Path "platform-tools.zip" -DestinationPath "C:\"
+
+      - name: Build Standalone Executable
+        run: |
+          python build_exe.py
+
+      - name: Upload Executable Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ADB-Phone-Backup-Windows
+          path: dist/ADB-Phone-Backup.exe
