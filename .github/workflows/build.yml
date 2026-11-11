@@ -1,14 +1,14 @@
-name: Build Standalone Windows Executable
+name: Build Windows Desktop Application
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, feature/** ]
   pull_request:
     branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
-  build-windows:
+  test-and-build:
     runs-on: windows-latest
 
     steps:
@@ -18,25 +18,69 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
-      - name: Install Dependencies
+      - name: Install Python Dependencies & Test Suite
         run: |
           python -m pip install --upgrade pip
           pip install "setuptools<80"
-          pip install pyinstaller pillow
+          pip install pyinstaller pillow pytest
+
+      - name: Run Python Backend & IPC Unit Tests
+        run: |
+          python -m pytest tests/test_backend.py -v
 
       - name: Set up Android Platform Tools (ADB)
         run: |
           Invoke-WebRequest -Uri "https://dl.google.com/android/repository/platform-tools-latest-windows.zip" -OutFile "platform-tools.zip"
           Expand-Archive -Path "platform-tools.zip" -DestinationPath "C:\"
 
-      - name: Build Standalone Executable
+      - name: Stage Standalone Runtime & ADB Bundle
+        run: |
+          python scripts/prepare_bundle.py --platform-tools C:\platform-tools
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Install Frontend Dependencies
+        run: |
+          npm ci
+
+      - name: Build Frontend Production Assets
+        run: |
+          npm run build
+
+      - name: Set up Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Rust Checks & Unit Tests
+        run: |
+          cd src-tauri
+          cargo test --verbose
+
+      - name: Build Tauri Desktop Application
+        run: |
+          npx tauri build
+
+      - name: Build Legacy PyInstaller Standalone Executable
         run: |
           python build_exe.py
 
-      - name: Upload Executable Artifact
+      - name: Upload Tauri Desktop Bundle
         uses: actions/upload-artifact@v4
         with:
-          name: ADB-Phone-Backup-Windows
+          name: ADB-Phone-Backup-Desktop-Tauri
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.msi
+
+      - name: Upload Standalone PyInstaller Executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: ADB-Phone-Backup-Portable-PyInstaller
           path: dist/ADB-Phone-Backup.exe

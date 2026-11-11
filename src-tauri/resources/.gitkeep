@@ -1,0 +1,2 @@
+# Placeholder so Tauri resource directory exists during cargo check/dev builds.
+# Run `python scripts/prepare_bundle.py` before standalone production builds.
