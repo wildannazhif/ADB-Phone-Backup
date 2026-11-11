@@ -358,6 +358,8 @@ class AdbManager:
         preserve_timestamps: bool = True,
         log_callback: Optional[Callable[[str, str], None]] = None,
         progress_callback: Optional[Callable[[float, str, int, int], None]] = None,
+        auto_skip: bool = True,
+        telemetry_callback: Optional[Callable[[dict], None]] = None,
     ) -> tuple[int, int, int]:
         """
         Synchronizes remote_dir to local_dest.
@@ -372,6 +374,11 @@ class AdbManager:
         remote_files = self.scan_remote_files(serial, clean_remote, log_callback=log_callback)
         total_files = len(remote_files)
 
+        if self._is_cancelled:
+            if log_callback:
+                log_callback("Backup dibatalkan oleh pengguna.", "warning")
+            return (0, 0, 0)
+
         if total_files == 0:
             if log_callback:
                 log_callback(f"Tidak ada file di folder HP: {clean_remote}", "warning")
@@ -380,7 +387,7 @@ class AdbManager:
         # 2. Build local index of existing files in local_dest:
         # Map: relative_path_normalized_lower -> file_size
         local_index: dict[str, int] = {}
-        if os.path.exists(local_dest):
+        if auto_skip and os.path.exists(local_dest):
             for root, _, filenames in os.walk(local_dest):
                 for fn in filenames:
                     full_lp = os.path.join(root, fn)
@@ -399,23 +406,43 @@ class AdbManager:
             rel_norm = rel_path.replace("\\", "/").strip("/").lower()
 
             # Exact relative path match & matching size (including 0-byte files like .nomedia)
-            if rel_norm in local_index and local_index[rel_norm] == remote_size:
+            if auto_skip and rel_norm in local_index and local_index[rel_norm] == remote_size:
                 skipped += 1
             else:
                 need_pull.append((rel_path, remote_size))
 
         if skipped > 0 and log_callback:
             log_callback(f"⚡ AUTO-SKIP: {skipped:,} file sudah ada di tujuan (relative path & ukuran sama), dilewati otomatis!", "skip")
+        elif not auto_skip and log_callback:
+            log_callback("Smart Auto-Skip dinonaktifkan: semua file hasil scan akan disalin ulang.", "info")
 
         if not need_pull:
             if log_callback:
                 log_callback(f"✅ Semua {total_files:,} file sudah lengkap di tujuan! (0 disalin, {skipped:,} dilewati).", "success")
             if progress_callback:
                 progress_callback(100.0, f"Selesai! {skipped:,} file identik dilewati.", 0, skipped)
+            if telemetry_callback:
+                telemetry_callback({
+                    "phase": "target_done",
+                    "total_scanned": total_files,
+                    "total_to_pull": 0,
+                    "file_index": 0,
+                    "current_file": "",
+                    "current_file_rel": "",
+                    "current_file_bytes": 0,
+                    "transferred": 0,
+                    "skipped": skipped,
+                    "errors": 0,
+                    "bytes_transferred": 0,
+                    "bytes_total_to_pull": 0,
+                    "pct": 100.0,
+                })
             return (0, skipped, 0)
 
         # 4. Pull only the missing or modified files
         total_pull = len(need_pull)
+        bytes_total_to_pull = sum(max(0, sz) for _, sz in need_pull)
+        bytes_transferred = 0
         if log_callback:
             log_callback(f"📥 Menyalin {total_pull:,} file baru/berubah ke: {local_dest}", "info")
 
@@ -438,6 +465,22 @@ class AdbManager:
             pct = (idx / total_pull) * 100.0
             if progress_callback:
                 progress_callback(pct, f"[{idx}/{total_pull}] Menyalin: {filename}", transferred, skipped)
+            if telemetry_callback:
+                telemetry_callback({
+                    "phase": "pulling",
+                    "total_scanned": total_files,
+                    "total_to_pull": total_pull,
+                    "file_index": idx,
+                    "current_file": filename,
+                    "current_file_rel": rel_path,
+                    "current_file_bytes": remote_size,
+                    "transferred": transferred,
+                    "skipped": skipped,
+                    "errors": errors,
+                    "bytes_transferred": bytes_transferred,
+                    "bytes_total_to_pull": bytes_total_to_pull,
+                    "pct": pct,
+                })
 
             pull_args = [adb, "-s", serial, "pull"]
             if preserve_timestamps:
@@ -459,6 +502,13 @@ class AdbManager:
                 if ret == 0:
                     transferred += 1
                     local_index[rel_path.replace("\\", "/").strip("/").lower()] = remote_size
+                    if remote_size > 0:
+                        bytes_transferred += remote_size
+                    elif os.path.exists(local_file_path):
+                        try:
+                            bytes_transferred += os.path.getsize(local_file_path)
+                        except OSError:
+                            pass
                     if log_callback and (transferred % 25 == 0 or transferred <= 5):
                         log_callback(f"✓ Disalin ({transferred}/{total_pull}): {filename}", "detail")
                 else:
@@ -472,6 +522,23 @@ class AdbManager:
 
         if progress_callback:
             progress_callback(100.0, f"Selesai! {transferred:,} disalin, {skipped:,} dilewati.", transferred, skipped)
+
+        if telemetry_callback:
+            telemetry_callback({
+                "phase": "target_done",
+                "total_scanned": total_files,
+                "total_to_pull": total_pull,
+                "file_index": total_pull,
+                "current_file": "",
+                "current_file_rel": "",
+                "current_file_bytes": 0,
+                "transferred": transferred,
+                "skipped": skipped,
+                "errors": errors,
+                "bytes_transferred": bytes_transferred,
+                "bytes_total_to_pull": bytes_total_to_pull,
+                "pct": 100.0,
+            })
 
         if log_callback:
             log_callback(
