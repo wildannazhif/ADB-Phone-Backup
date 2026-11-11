@@ -12,6 +12,19 @@ Antarmuka desktop dibangun menggunakan **Tauri 2 + Rust + React + TypeScript + T
 
 ---
 
+## 💾 Unduh & Jalankan di Windows (Siap Pakai)
+
+Aplikasi telah dikompilasi menjadi biner `.exe` mandiri sehingga **langsung siap dijalankan di Windows 10 & 11 tanpa perlu memasang Python, Node.js, atau compiler Rust**:
+
+| File Binary | Tipe | Deskripsi & Keunggulan |
+| :--- | :---: | :--- |
+| **[`ADB-Phone-Backup-Setup.exe`](https://github.com/wildannazhif/ADB-Phone-Backup/releases)** | **Installer (Disarankan)** | Aplikasi desktop modern (Tauri 2 + React + Tailwind). Dilengkapi installer NSIS, shortcut Desktop & Start Menu, runtime Python embeddable mandiri, dan biner ADB. |
+| **[`ADB-Phone-Backup.exe`](./dist/ADB-Phone-Backup.exe)** | **Portable Single-File** | Versi mandiri satu file tanpa instalasi (PyInstaller). Tinggal klik dua kali langsung berjalan. |
+
+> 💡 **Unduh Langsung**: File executable dapat diunduh dari folder [`dist/`](./dist) atau melalui tab **[GitHub Releases](https://github.com/wildannazhif/ADB-Phone-Backup/releases)**.
+
+---
+
 ## 🏗️ Arsitektur Sistem
 
 ```
@@ -74,7 +87,8 @@ ADB-Phone-Backup/
 │   ├── icon.ico                    # Windows icon multi-resolusi
 │   └── icon.png                    # Ikon aplikasi PNG master
 ├── dist/
-│   └── ADB-Phone-Backup.exe        # Binary standalone PyInstaller legacy
+│   ├── ADB-Phone-Backup-Setup.exe  # Installer Desktop Modern Tauri 2 (NSIS + Python + ADB)
+│   └── ADB-Phone-Backup.exe        # Binary standalone PyInstaller portable single-file
 ├── scripts/
 │   └── prepare_bundle.py           # Skrip staging runtime Python embeddable & ADB platform-tools
 ├── src/                            # Mesin Python (Source of Truth)

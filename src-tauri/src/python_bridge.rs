@@ -200,22 +200,43 @@ impl PythonSidecarManager {
     fn resolve_runtime_paths(&self) -> Result<(PathBuf, PathBuf, Option<String>), String> {
         // 1. Check bundled resource directory (standalone production distribution)
         if let Ok(res_dir) = self.app_handle.path().resource_dir() {
-            let bundled_py = res_dir.join("resources").join("python-runtime").join("python.exe");
-            let bundled_script = res_dir.join("resources").join("backend").join("src").join("ipc_worker.py");
-            if bundled_py.exists() && bundled_script.exists() {
+            // Check nested resources/ layout (typical Tauri bundle)
+            let nested_py = res_dir.join("resources").join("python-runtime").join("python.exe");
+            let nested_script = res_dir.join("resources").join("backend").join("src").join("ipc_worker.py");
+            if nested_py.exists() && nested_script.exists() {
                 let py_path = res_dir.join("resources").join("backend");
-                return Ok((bundled_py, bundled_script, Some(py_path.to_string_lossy().to_string())));
+                return Ok((nested_py, nested_script, Some(py_path.to_string_lossy().to_string())));
+            }
+
+            // Check flat layout directly inside resource_dir
+            let flat_py = res_dir.join("python-runtime").join("python.exe");
+            let flat_script = res_dir.join("backend").join("src").join("ipc_worker.py");
+            if flat_py.exists() && flat_script.exists() {
+                let py_path = res_dir.join("backend");
+                return Ok((flat_py, flat_script, Some(py_path.to_string_lossy().to_string())));
             }
 
             let direct_script = res_dir.join("src").join("ipc_worker.py");
-            if bundled_py.exists() && direct_script.exists() {
-                return Ok((bundled_py, direct_script, Some(res_dir.to_string_lossy().to_string())));
+            if nested_py.exists() && direct_script.exists() {
+                return Ok((nested_py, direct_script, Some(res_dir.to_string_lossy().to_string())));
+            }
+            if flat_py.exists() && direct_script.exists() {
+                return Ok((flat_py, direct_script, Some(res_dir.to_string_lossy().to_string())));
             }
         }
 
         // 2. Check relative to current executable parent
         if let Ok(exe_path) = std::env::current_exe() {
             if let Some(exe_dir) = exe_path.parent() {
+                // Nested resources/ check
+                let nested_py = exe_dir.join("resources").join("python-runtime").join("python.exe");
+                let nested_script = exe_dir.join("resources").join("backend").join("src").join("ipc_worker.py");
+                if nested_py.exists() && nested_script.exists() {
+                    let py_path = exe_dir.join("resources").join("backend");
+                    return Ok((nested_py, nested_script, Some(py_path.to_string_lossy().to_string())));
+                }
+
+                // Flat layout check
                 let local_py = exe_dir.join("python-runtime").join("python.exe");
                 let local_script = exe_dir.join("backend").join("src").join("ipc_worker.py");
                 if local_py.exists() && local_script.exists() {
@@ -257,16 +278,24 @@ impl PythonSidecarManager {
 
     fn resolve_bundled_platform_tools_dir(&self) -> Option<PathBuf> {
         if let Ok(res_dir) = self.app_handle.path().resource_dir() {
-            let pt = res_dir.join("resources").join("platform-tools");
-            if pt.join("adb.exe").exists() {
-                return Some(pt);
+            let pt_nested = res_dir.join("resources").join("platform-tools");
+            if pt_nested.join("adb.exe").exists() {
+                return Some(pt_nested);
+            }
+            let pt_flat = res_dir.join("platform-tools");
+            if pt_flat.join("adb.exe").exists() {
+                return Some(pt_flat);
             }
         }
         if let Ok(exe_path) = std::env::current_exe() {
             if let Some(exe_dir) = exe_path.parent() {
-                let pt = exe_dir.join("resources").join("platform-tools");
-                if pt.join("adb.exe").exists() {
-                    return Some(pt);
+                let pt_nested = exe_dir.join("resources").join("platform-tools");
+                if pt_nested.join("adb.exe").exists() {
+                    return Some(pt_nested);
+                }
+                let pt_flat = exe_dir.join("platform-tools");
+                if pt_flat.join("adb.exe").exists() {
+                    return Some(pt_flat);
                 }
             }
         }

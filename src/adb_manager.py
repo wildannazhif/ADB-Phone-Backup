@@ -60,6 +60,9 @@ class AdbManager:
         exe_dir = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
         candidates.append(exe_dir / "adb.exe")
         candidates.append(exe_dir / "platform-tools" / "adb.exe")
+        candidates.append(exe_dir.parent / "platform-tools" / "adb.exe")
+        candidates.append(exe_dir.parent / "resources" / "platform-tools" / "adb.exe")
+        candidates.append(Path(__file__).resolve().parent.parent / "resources" / "platform-tools" / "adb.exe")
 
         which_adb = shutil.which("adb")
         if which_adb:

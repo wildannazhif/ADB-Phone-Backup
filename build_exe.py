@@ -48,11 +48,18 @@ def build():
         "--hidden-import", "src.gui",
         "--hidden-import", "src.adb_manager",
         "--hidden-import", "src.browser_dialog",
+        "--hidden-import", "src.target_resolver",
+        "--hidden-import", "src.ipc_worker",
     ]
 
-    # Include ADB binaries if available on Windows
-    platform_tools = Path("C:/platform-tools")
-    if platform_tools.exists():
+    # Include ADB binaries if available on Windows or staged bundle
+    candidates = [
+        Path("C:/platform-tools"),
+        project_root / "src-tauri" / "resources" / "platform-tools",
+        Path("C:/Android/platform-tools"),
+    ]
+    platform_tools = next((c for c in candidates if c.exists() and (c / "adb.exe").exists()), None)
+    if platform_tools:
         adb_files = ["adb.exe", "AdbWinApi.dll", "AdbWinUsbApi.dll", "libwinpthread-1.dll"]
         for f in adb_files:
             fp = platform_tools / f
